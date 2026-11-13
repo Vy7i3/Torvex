@@ -1,8 +1,16 @@
-use anyhow::Result;
+//! Detection engine abstraction.
+
 use std::path::Path;
 
-use crate::engine::ScanResult;
+use anyhow::Result;
 
+use crate::engine::RuleMatch;
+
+/// A detection backend that checks one file and returns matching rules.
+///
+/// Implementations must be safe to call from a scan worker thread and should
+/// keep file contents local.
 pub trait DetectionEngine {
-    fn scan_file(&self, path: &Path, sha256: &str, file_size: u64) -> Result<ScanResult>;
+    /// Scans `path` and returns matching rules, sorted deterministically.
+    fn scan_file(&self, path: &Path) -> Result<Vec<RuleMatch>>;
 }
