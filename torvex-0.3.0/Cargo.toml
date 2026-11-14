@@ -1,0 +1,45 @@
+[package]
+name = "torvex"
+version = "0.3.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Local-first security scanner: YARA-X, a native C++ indicator engine, and a Python host audit, in one report"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["security", "scanner", "yara", "malware", "audit"]
+categories = ["command-line-utilities", "security"]
+default-run = "torvex"
+build = "build.rs"
+
+[features]
+# The desktop GUI needs system X11/Wayland and GL development headers, so it is
+# opt-in: `cargo build --features gui`. The default build is headless and serves
+# the web dashboard from `torvex serve`.
+default = []
+gui = ["dep:eframe"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# YARA-X 1.23's default crypto modules use this rsa feature but do not enable it.
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"], optional = true }
+hex = "0.4"
+infer = "0.22"
+mime_guess = "2"
+rsa = { version = "0.10", features = ["pkcs1v15"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+walkdir = "2"
+yara-x = "1.23"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"
