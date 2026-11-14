@@ -10,6 +10,7 @@ use yara_x::{Compiler, MetaValue, Rule, Rules, Scanner};
 
 use crate::detection::DetectionEngine;
 use crate::engine::{RuleMatch, RuleSetInfo};
+use crate::findings::{Evidence, Severity, Source};
 
 /// The demo rule set compiled into the binary as a portable fallback.
 const EMBEDDED_RULES: &str = include_str!("../../rules/basic.yar");
@@ -58,6 +59,23 @@ impl YaraEngine {
     /// Metadata for the rule set that was loaded.
     pub fn info(&self) -> &RuleSetInfo {
         &self.info
+    }
+
+    /// Every compiled rule as `(identifier, namespace, is_demo)`, sorted.
+    pub fn list_rules(&self) -> Vec<(String, String, bool)> {
+        let mut rules = self
+            .rules
+            .iter()
+            .map(|rule| {
+                (
+                    rule.identifier().to_owned(),
+                    rule.namespace().to_owned(),
+                    rule_is_demo(&rule),
+                )
+            })
+            .collect::<Vec<_>>();
+        rules.sort();
+        rules
     }
 
     /// Loads rules from an explicit directory. Returns an error when the
@@ -141,28 +159,56 @@ impl YaraEngine {
         let info = rule_set_info("embedded demo rules".to_owned(), None, &rules);
         Ok(Self { rules, info })
     }
+
+    /// Convenience wrapper that reads `path` and scans it. The scanner uses
+    /// [`DetectionEngine::scan`] instead so a file is read only once.
+    pub fn scan_file(&self, path: &Path) -> Result<Vec<RuleMatch>> {
+        let content =
+            fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+        self.scan(path, &content)
+    }
 }
 
 impl DetectionEngine for YaraEngine {
-    fn scan_file(&self, path: &Path) -> Result<Vec<RuleMatch>> {
+    fn name(&self) -> &'static str {
+        "yara"
+    }
+
+    fn scan(&self, path: &Path, content: &[u8]) -> Result<Vec<RuleMatch>> {
         let mut scanner = Scanner::new(&self.rules);
         scanner.set_timeout(SCAN_TIMEOUT);
         let results = scanner
-            .scan_file(path)
+            .scan(content)
             .with_context(|| format!("YARA scan failed for {}", path.display()))?;
 
         let mut matches = results
             .matching_rules()
-            .map(|rule| RuleMatch {
-                rule: rule.identifier().to_owned(),
-                namespace: rule.namespace().to_owned(),
-                tags: rule.tags().map(|tag| tag.identifier().to_owned()).collect(),
-                description: rule_description(&rule),
-                demo: rule_is_demo(&rule),
+            .map(|rule| {
+                let demo = rule_is_demo(&rule);
+                let severity = rule_severity(&rule);
+                let identifier = rule.identifier().to_owned();
+                RuleMatch {
+                    engine: Source::Yara,
+                    title: meta_string(&rule, "title").unwrap_or_else(|| identifier.clone()),
+                    description: meta_string(&rule, "description"),
+                    rule: identifier.clone(),
+                    namespace: rule.namespace().to_owned(),
+                    severity,
+                    level: severity.level(),
+                    tags: rule.tags().map(|tag| tag.identifier().to_owned()).collect(),
+                    demo,
+                    evidence: vec![Evidence::new("rule", identifier)],
+                    mitre: meta_list(&rule, "mitre"),
+                    compliance: meta_list(&rule, "compliance"),
+                    remediation: meta_string(&rule, "remediation"),
+                }
             })
             .collect::<Vec<_>>();
         matches.sort_by(|left, right| {
-            (&left.rule, &left.namespace).cmp(&(&right.rule, &right.namespace))
+            right
+                .level
+                .cmp(&left.level)
+                .then_with(|| (&left.rule, &left.namespace).cmp(&(&right.rule, &right.namespace)))
         });
 
         Ok(matches)
@@ -203,20 +249,61 @@ fn rule_set_info(source: String, rules_dir: Option<PathBuf>, rules: &Rules) -> R
     }
 }
 
-fn rule_description(rule: &Rule<'_, '_>) -> Option<String> {
-    rule.metadata().find_map(|(key, value)| {
-        if key == "description"
-            && let MetaValue::String(description) = value
+fn meta_string(rule: &Rule<'_, '_>, key: &str) -> Option<String> {
+    rule.metadata().find_map(|(name, value)| {
+        if name == key
+            && let MetaValue::String(text) = value
         {
-            return Some(description.to_owned());
+            return Some(text.to_owned());
         }
         None
     })
 }
 
+/// Reads a comma- or semicolon-separated metadata list such as `mitre`.
+///
+/// Values may contain spaces ("PCI DSS 6.4"), so only explicit separators
+/// split the list.
+fn meta_list(rule: &Rule<'_, '_>, key: &str) -> Vec<String> {
+    meta_string(rule, key)
+        .map(|value| {
+            value
+                .split([',', ';'])
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn rule_is_demo(rule: &Rule<'_, '_>) -> bool {
     rule.metadata()
         .any(|(key, value)| key == "demo" && matches!(value, MetaValue::Bool(true)))
+}
+
+/// Severity from rule metadata, then tags, then a conservative default.
+///
+/// A demo fixture is never treated as more than low severity, whatever its
+/// tags say, because demo rules exist only to exercise the scanner path.
+fn rule_severity(rule: &Rule<'_, '_>) -> Severity {
+    if rule_is_demo(rule) {
+        return Severity::Low;
+    }
+    if let Some(severity) = meta_string(rule, "severity").and_then(|value| Severity::parse(&value))
+    {
+        return severity;
+    }
+    for tag in rule.tags() {
+        match tag.identifier() {
+            "critical" | "ransomware" | "webshell" => return Severity::Critical,
+            "high" | "malware" | "loader" => return Severity::High,
+            "medium" | "suspicious" => return Severity::Medium,
+            "low" | "hunting" => return Severity::Low,
+            _ => {}
+        }
+    }
+    Severity::Medium
 }
 
 #[cfg(test)]
@@ -244,6 +331,8 @@ rule torvex_test_custom
 {
     meta:
         description = "Test-only custom marker"
+        severity = "critical"
+        mitre = "T1059, T1105"
     strings:
         $marker = "TORVEX_CUSTOM_TEST_MARKER"
     condition:
@@ -264,6 +353,9 @@ rule torvex_test_custom
         assert_eq!(matches[0].rule, "torvex_test_custom");
         assert_eq!(matches[0].namespace, "default");
         assert!(!matches[0].demo);
+        assert_eq!(matches[0].severity, Severity::Critical);
+        assert_eq!(matches[0].level, 10);
+        assert_eq!(matches[0].mitre, vec!["T1059", "T1105"]);
         assert_eq!(
             matches[0].description.as_deref(),
             Some("Test-only custom marker")
@@ -297,5 +389,23 @@ rule torvex_test_custom
             .err()
             .expect("empty rules directory should fail");
         assert!(error.to_string().contains("no .yar or .yara rule files"));
+    }
+
+    #[test]
+    fn demo_rules_are_never_reported_above_low() {
+        let engine = YaraEngine::from_embedded().expect("compile demo rules");
+        let matches = engine
+            .scan(Path::new("marker.txt"), b"TORVEX_YARA_EXAMPLE_TEXT")
+            .expect("scan");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].severity, Severity::Low);
+        assert!(matches[0].demo);
+    }
+
+    #[test]
+    fn scans_an_empty_buffer_without_panicking() {
+        let engine = YaraEngine::from_embedded().expect("compile demo rules");
+        let matches = engine.scan(Path::new("empty"), b"").expect("scan");
+        assert!(matches.is_empty());
     }
 }
