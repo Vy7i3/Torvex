@@ -1,15 +1,41 @@
-//! Torvex is an experimental, local-first file scanner.
+//! Torvex is a local-first security scanner.
 //!
-//! The library exposes path scanning, YARA-X detection, and shared result
-//! types. File contents are read locally and are never uploaded by this crate.
+//! Three engines feed one report:
 //!
-//! This is not an antivirus: demo rules in the repository are harmless test
-//! fixtures, and a clean result only means that no loaded rule matched.
+//! * **YARA-X** evaluates declarative content rules.
+//! * A **C++ native core** ([`detection::NativeEngine`]) runs a single-pass
+//!   Aho-Corasick indicator catalogue and structural analysis of ELF and PE
+//!   images.
+//! * A **Python audit engine** ([`audit`]) performs a Lynis-style, read-only
+//!   configuration assessment of a Linux host and computes a hardening index.
+//!
+//! Findings share one model ([`findings::Finding`]) with severity, a
+//! Wazuh-style numeric level, ATT&CK mappings and remediation. [`correlation`]
+//! then applies Wazuh-style composite rules so that three weak signals become
+//! one strong one.
+//!
+//! Local-first: file contents are read locally and never uploaded. Torvex makes
+//! no network requests of its own.
+//!
+//! Safety policy: `unsafe` is denied crate-wide and allowed only in
+//! `detection::ffi`, which implements the C ABI boundary. The scanner itself
+//! never writes to, deletes or quarantines a scanned file.
+//!
+//! This is not an antivirus. A rule match is evidence to review, not proof of
+//! malware, and a clean result only means that no loaded rule matched.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
 
+pub mod audit;
+pub mod correlation;
 pub mod detection;
 pub mod engine;
-pub mod gui;
+pub mod findings;
+pub mod report;
 pub mod scanner;
 pub mod utils;
+pub mod web;
+
+#[cfg(feature = "gui")]
+pub mod gui;

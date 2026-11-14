@@ -1,0 +1,12 @@
+/target/
+/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+/.env
+/.env.*
+!.env.example
+.DS_Store
+*.swp
+*.swo
+*.profraw

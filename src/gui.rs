@@ -76,6 +76,7 @@ impl TorvexApp {
         let rules_dir = self.rules_dir.trim();
         let options = ScanOptions {
             rules_dir: (!rules_dir.is_empty()).then(|| PathBuf::from(rules_dir)),
+            ..ScanOptions::default()
         };
 
         let (sender, receiver) = mpsc::channel();

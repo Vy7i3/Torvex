@@ -3,6 +3,104 @@
 All notable changes to Torvex are documented here. Torvex is experimental and
 uses `0.x` versioning; breaking changes are expected between minor releases.
 
+## 0.3.0 - 2026-11-14
+
+The "three engines, one report" release. Torvex now answers both "what is in
+these files?" and "how is this host configured?", and correlates the answers.
+
+### Added
+
+- **Native C++ indicator engine** (`native/torvex_core.cpp`, built by
+  `build.rs` with the `cc` crate). One Aho-Corasick automaton per case mode
+  scans a file in a single pass. 33 content indicators cover script loaders,
+  reverse shells, credential access, persistence, miners, web shells, ransomware
+  notes, C2/exfiltration and defense evasion, each with severity, tags, ATT&CK
+  mapping and remediation.
+- **ELF/PE structural analysis**: W^X segments, writable entry points,
+  executable stacks, missing RELRO, non-PIE, RWX sections, ASLR/NX/CFG flags,
+  stripped relocations, packer section names and high-entropy sections.
+- **Entropy and IOC extraction**: whole-buffer and worst-window entropy, longest
+  base64 run, URLs, e-mail addresses and IPv4 literals.
+- **Python host audit engine** (`python/torvex_audit.py`, embedded in the
+  binary): 57 Lynis-style controls across ACCT, AUTH, SSH, FIRE, KRNL, FILE,
+  LOGG, PKGS, SERV, SCHD, CRYP and MAND, with stable ids, rationale,
+  remediation, compliance and ATT&CK mappings.
+- **Hardening index** with category weights, 60% credit for suggestions and
+  inapplicable-control exclusion. A root without `/etc` skips every control.
+- **JSON audit policies** (`--policy`) with category weights, disabled controls,
+  severity overrides and a minimum score.
+- **Audit plugins** (`torvex_audit.py --plugin file.py`) that can register extra
+  controls.
+- **Correlation engine** (`src/correlation.rs`, `rules/correlation.json`)
+  modelled on Wazuh: id selection with prefix wildcards, `frequency`,
+  `same_target`, `require_sources` and `require_tags`, producing compound
+  findings with a `related` list.
+- **Unified finding model** with severity, Wazuh-style level, source, tags,
+  ATT&CK, compliance, evidence, remediation and demo marking.
+- **Risk score** (0-100) and severity buckets in the report summary.
+- **Self-contained HTML dashboard** with filtering, search, sorting, expandable
+  findings, audit scorecards, JSON export and print support. No external assets.
+- **Local web dashboard** (`torvex serve`) with a scan form, token-protected
+  mutations, root confinement and a restrictive CSP.
+- **New YARA packs**: `suspicious_scripts.yar`, `webshells.yar`, `iocs.yar`
+  (17 rules total, 14 detection + 3 demo) with `severity`, `mitre`, `compliance` and `remediation`
+  metadata.
+- **New commands**: `audit`, `report`, `serve`, `rules list`, `rules validate`,
+  `info`.
+- **`--fail-on`** thresholds, per-command formats (`pretty`, `json`, `html`) and
+  `--output` for every format.
+- **Vendor-directory skipping** (`.git`, `node_modules`, `target`, ...) with
+  `--include-vendor` to disable it.
+- **Native test harness** (`native/test_native.cpp`, 50 assertions) independent
+  of Cargo.
+- **Python unittest suite** (30 tests) using insecure and hardened fake roots.
+- **Architecture documentation** comparing the framework with Lynis and Wazuh.
+
+### Changed
+
+- `ScanOptions` gained engine selection, audit options, correlation options, a
+  scan-size cap and an ignore list. Use `..ScanOptions::default()`.
+- `ScanReport` is now the serialisable report itself (schema
+  `torvex.report.v2`); the CLI no longer wraps it in a separate struct.
+- `RuleMatch` gained engine, title, severity, level, evidence, ATT&CK,
+  compliance and remediation fields; matches are sorted most severe first.
+- `DetectionEngine` now takes a buffer (`scan(path, content)`) so a file is read
+  only once for hashing and detection.
+- Fingerprinting returns buffered content and a truncation flag alongside the
+  hash, size and type.
+- The desktop GUI is an opt-in `gui` feature. The default build is headless.
+- Human output was redesigned around risk, findings and host hardening.
+- `--json` remains an alias for `--format json`.
+- The CI workflow installs a C++ toolchain, runs Clippy, rustfmt, Rust tests,
+  Python tests and the native harness, and checks the GUI feature separately.
+
+### Fixed
+
+- YARA rule severity no longer defaults to "suspicious"; rules can declare
+  `severity` and demo fixtures are capped at low.
+- Demo fixtures no longer contribute to the risk score.
+- Audit controls whose subject is absent (no sshd, no auditd) are skipped rather
+  than counted as passing.
+- Audit roots that do not exist are rejected with a clear error instead of
+  producing an empty report.
+- The audit engine no longer hangs: it has a hard timeout and captures output
+  through files rather than pipes.
+- Path traversal outside an audit root is refused.
+- HTML reports escape embedded JSON so a hostile file name cannot break out of
+  the script element.
+
+### Security
+
+- `unsafe` remains denied crate-wide and is confined to `detection::ffi`, with
+  ownership and allocator rules documented and tested.
+- The native core caps matches, IOCs, needles and scanned bytes; the audit has a
+  120-second timeout; YARA keeps its 30-second per-file timeout.
+- The web dashboard binds loopback, requires a per-process token for scans,
+  confines scans to `--root`, caps request sizes and sends `no-store`,
+  `nosniff`, `DENY` and a restrictive CSP.
+- Audit commands run from a read-only allowlist, and only against the live root.
+- Scanned files are never modified, quarantined or deleted.
+
 ## 0.2.0 - 2026-11-13
 
 ### Added
