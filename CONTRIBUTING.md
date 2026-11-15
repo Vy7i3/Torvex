@@ -9,14 +9,14 @@ Run these checks from the repository root:
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
 python3 -m unittest discover -s python -v
 
 g++ -std=c++17 -O2 native/torvex_core.cpp native/test_native.cpp -o /tmp/torvex-native
 /tmp/torvex-native
 
-cargo check --features gui        # only if you touched the GUI
+cargo check --locked --features gui   # only if you touched the GUI
 ```
 
 `cargo test --all-targets` builds the C++ core through `build.rs`, so a C++17

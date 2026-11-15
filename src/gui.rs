@@ -153,7 +153,7 @@ impl eframe::App for TorvexApp {
         egui::CentralPanel::default().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Torvex");
-                ui.label(RichText::new("experimental alpha").small().weak());
+                ui.label(RichText::new("experimental beta").small().weak());
             });
             ui.label("Local-first file scanner. Not an antivirus.");
             ui.add_space(12.0);

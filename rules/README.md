@@ -16,7 +16,7 @@ they do not match files, they combine findings.
 | `basic.yar` | 3 | Harmless demo fixtures. Every rule sets `demo = true`. |
 | `suspicious_scripts.yar` | 6 | PowerShell cradles, reverse shells, miners, ransom notes, anti-forensics |
 | `webshells.yar` | 4 | PHP/JSP/ASP command execution and encoded payloads |
-| `iocs.yar` | 5 | Cloud keys, private key material, chat webhooks, history upload |
+| `iocs.yar` | 4 | Cloud keys, private key material, chat webhooks, history upload |
 
 `basic.yar` is the compiled-in fallback. It exists to prove the scanner path
 works; it is not detection content, and Torvex labels it everywhere.
@@ -180,9 +180,10 @@ change scan results. Only point Torvex at directories you trust.
 ## Verifying rule changes
 
 ```sh
-cargo test
+cargo fmt --all -- --check
+cargo test --locked --all-targets
 python3 -m unittest discover -s python -v
-cargo clippy --all-targets -- -D warnings
+cargo clippy --locked --all-targets -- -D warnings
 ```
 
 A useful rule test should show:

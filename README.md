@@ -255,12 +255,12 @@ apply the parts of the Wazuh rule engine that make sense for findings:
 | `require_sources` | Every listed engine must be represented |
 | `require_tags` | Every listed tag must appear among the matches |
 
-Shipped rules include: three severe indicators in one file
-(`TVX-CORR-001`), several SSH gaps (`TVX-CORR-002`), content findings plus host
-failures (`TVX-CORR-003`), YARA and native agreeing on one file
-(`TVX-CORR-004`), credentials beside an exfiltration channel
-(`TVX-CORR-006`), and persistence beside privilege escalation
-(`TVX-CORR-007`).
+Shipped rules (8): three severe indicators in one file (`TVX-CORR-001`),
+several SSH gaps (`TVX-CORR-002`), content findings plus host failures
+(`TVX-CORR-003`), YARA and native agreeing on one file (`TVX-CORR-004`),
+widespread medium findings (`TVX-CORR-005`), credentials beside an exfiltration
+channel (`TVX-CORR-006`), persistence beside privilege escalation
+(`TVX-CORR-007`) and audit-trail tampering indicators (`TVX-CORR-008`).
 
 Correlated findings are `source: "correlation"` and list their contributing
 findings in `related`. They never feed back into correlation.
@@ -312,18 +312,22 @@ findings in `related`. They never feed back into correlation.
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
 python3 -m unittest discover -s python -v
 
 # native C++ harness, independent of Cargo
 g++ -std=c++17 -O2 native/torvex_core.cpp native/test_native.cpp -o /tmp/torvex-native
 /tmp/torvex-native
+
+# optional desktop GUI
+cargo check --locked --features gui
 ```
 
 Current status: **82 Rust tests (57 unit, 2 binary, 23 integration), 30 Python
-tests and 50 native assertions pass**. `cargo clippy --all-targets -- -D warnings` and
-`cargo fmt --check` are clean.
+tests and 50 native assertions pass**. `cargo clippy --locked --all-targets --
+-D warnings` and `cargo fmt --check` are clean, and the declared MSRV is
+checked with Rust 1.95.0 in CI.
 
 Adding a capability:
 

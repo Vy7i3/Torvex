@@ -72,7 +72,16 @@ these files?" and "how is this host configured?", and correlates the answers.
 - Human output was redesigned around risk, findings and host hardening.
 - `--json` remains an alias for `--format json`.
 - The CI workflow installs a C++ toolchain, runs Clippy, rustfmt, Rust tests,
-  Python tests and the native harness, and checks the GUI feature separately.
+  Python tests and the native harness with `--locked`, checks the declared MSRV
+  (Rust 1.95.0) in a separate job, and checks the GUI feature separately.
+- The release workflow builds a headless binary and ships every rule file,
+  including `correlation.json`, in the archive.
+
+### Removed
+
+- Stray duplicates of the dot-directories at the repository root (`cargo/`,
+  `github/`, `editorconfig`, `gitignore`); the canonical `.cargo/`, `.github/`,
+  `.editorconfig` and `.gitignore` files are the only copies.
 
 ### Fixed
 

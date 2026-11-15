@@ -15,24 +15,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux GUI build dependencies
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes \
-            build-essential \
-            pkg-config \
-            libgl1-mesa-dev \
-            libwayland-dev \
-            libx11-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev
+          sudo apt-get install --yes build-essential
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Cargo artifacts
         uses: Swatinem/rust-cache@v2
       - name: Build release binary
+        # The default build is headless: no GUI, no GL/Wayland/X11 headers.
+        # The audit engine is embedded in the binary and needs python3 only at
+        # run time, so the archive works on any machine with Python installed.
         run: cargo build --locked --release
       - name: Package archive
         run: |
@@ -45,8 +39,7 @@ jobs:
           archive="torvex-${version}-x86_64-unknown-linux-gnu.tar.gz"
           mkdir -p "dist/torvex/rules"
           cp target/release/torvex dist/torvex/
-          cp rules/*.yar dist/torvex/rules/
-          cp rules/README.md dist/torvex/rules/
+          cp rules/*.yar rules/README.md rules/correlation.json dist/torvex/rules/
           cp README.md CHANGELOG.md SECURITY.md LICENSE-MIT LICENSE-APACHE dist/torvex/
           tar -C dist -czf "dist/${archive}" torvex
           cd dist
@@ -67,6 +60,6 @@ jobs:
             dist/*.tar.gz
             dist/*.sha256
           generate_release_notes: true
-          # Torvex is an alpha. Remove this when a stable release is published.
+          # 0.x releases are betas. Remove this when a stable 1.0 is published.
           prerelease: true
           fail_on_unmatched_files: true
